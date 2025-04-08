@@ -28,11 +28,12 @@ import logging
 import re
 from os import environ
 from time import sleep
-import requests
-from dateutil.tz import tz
-from dateutil.parser import parse
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from dateutil.tz import tz
+from dateutil.parser import parse
+
+import requests
 
 from beanprice import source
 
@@ -108,22 +109,22 @@ class Source(source.Source):
         return source.SourcePrice(price, date, base)
 
     def get_historical_price(
-        self, ticker: str, time: datetime
+        self, ticker, time: datetime
     ) -> Optional[source.SourcePrice]:
         kind, symbol, base = _parse_ticker(ticker)
-        """See contract in beanprice.source.Source."""
-        
+
         # Compact is default and returns 100 data points.  So use "full" if we need more.
-        # Due to weekends the data actually goes back just under 5 months (~150 days) so this could be optimized more.
-        paramOutputSize = "compact"
+        # Due to weekends the data actually goes back just under 5 months (~150 days) so
+        # this could be optimized more.
+        param_output_size = "compact"
         if time < datetime.now(timezone.utc) - timedelta(days=130):
-            paramOutputSize = "full"
+            param_output_size = "full"
 
         if kind == "price":
             params = {
                 "function": "TIME_SERIES_DAILY",
                 "symbol": symbol,
-                "outputSize": paramOutputSize
+                "outputSize": param_output_size
             }
 
             data = _do_fetch(params)
@@ -132,16 +133,21 @@ class Source(source.Source):
                 logging.info("Premium endpoint API key required.")
                 return None
             else:
-                price_data = data["Time Series (Daily)"]
+                if "Time Series (Daily)" in data:
+                    price_data = data["Time Series (Daily)"]
 
-                """If this day has price data use it, otherwise go backwards until one is found"""
-                while time.strftime("%Y-%m-%d") not in price_data:
-                    time -= timedelta(days=1)
-                
-                day_data = price_data[time.strftime("%Y-%m-%d")]
-                price = Decimal(day_data["4. close"])
+                    # If this day has price data use it, otherwise go backwards until one is
+                    # found.
+                    while time.strftime("%Y-%m-%d") not in price_data:
+                        time -= timedelta(days=1)
 
-                return source.SourcePrice(price, time, base)
+                    day_data = price_data[time.strftime("%Y-%m-%d")]
+                    price = Decimal(day_data["4. close"])
+
+                    return source.SourcePrice(price, time, base)
+                else:
+                    logging.error("Price data not found when expected: %s", repr(data))
+                    return None
         else:
             logging.info("Currency exchange not implemented yet.")
             return None
