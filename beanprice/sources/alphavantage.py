@@ -24,12 +24,15 @@ https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=
 
 from decimal import Decimal
 
+import logging
 import re
 from os import environ
 from time import sleep
 import requests
 from dateutil.tz import tz
 from dateutil.parser import parse
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from beanprice import source
 
@@ -104,5 +107,41 @@ class Source(source.Source):
 
         return source.SourcePrice(price, date, base)
 
-    def get_historical_price(self, ticker, time):
-        return None
+    def get_historical_price(
+        self, ticker: str, time: datetime
+    ) -> Optional[source.SourcePrice]:
+        kind, symbol, base = _parse_ticker(ticker)
+        """See contract in beanprice.source.Source."""
+        
+        # Compact is default and returns 100 data points.  So use "full" if we need more.
+        # Due to weekends the data actually goes back just under 5 months (~150 days) so this could be optimized more.
+        paramOutputSize = "compact"
+        if time < datetime.now(timezone.utc) - timedelta(days=130):
+            paramOutputSize = "full"
+
+        if kind == "price":
+            params = {
+                "function": "TIME_SERIES_DAILY",
+                "symbol": symbol,
+                "outputSize": paramOutputSize
+            }
+
+            data = _do_fetch(params)
+
+            if "Information" in data and "premium endpoint" in data["Information"].lower():
+                logging.info("Premium endpoint API key required.")
+                return None
+            else:
+                price_data = data["Time Series (Daily)"]
+
+                """If this day has price data use it, otherwise go backwards until one is found"""
+                while time.strftime("%Y-%m-%d") not in price_data:
+                    time -= timedelta(days=1)
+                
+                day_data = price_data[time.strftime("%Y-%m-%d")]
+                price = Decimal(day_data["4. close"])
+
+                return source.SourcePrice(price, time, base)
+        else:
+            logging.info("Currency exchange not implemented yet.")
+            return None
