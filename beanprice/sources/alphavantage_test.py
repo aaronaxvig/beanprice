@@ -11,6 +11,62 @@ import requests
 from beanprice import source
 from beanprice.sources import alphavantage
 
+timezone = tz.gettz("America/NewYork")
+
+# From
+# https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=IBM&apikey=demo
+# Truncated from 100 entries in typical response.
+response_tsda = {
+    "Meta Data": {
+        "1. Information": "Daily Time Series with Splits and Dividend Events",
+        "2. Symbol": "IBM",
+        "3. Last Refreshed": "2025-04-08",
+        "4. Output Size": "Compact",
+        "5. Time Zone": "US/Eastern"
+    },
+    "Time Series (Daily)": {
+        "2025-04-08": {
+            "1. open": "232.56",
+            "2. high": "233.05",
+            "3. low": "217.28",
+            "4. close": "221.03",
+            "5. adjusted close": "221.03",
+            "6. volume": "6374209",
+            "7. dividend amount": "0.0000",
+            "8. split coefficient": "1.0"
+        },
+        "2025-04-07": {
+            "1. open": "219.24",
+            "2. high": "232.29",
+            "3. low": "214.5",
+            "4. close": "225.78",
+            "5. adjusted close": "225.78",
+            "6. volume": "7797889",
+            "7. dividend amount": "0.0000",
+            "8. split coefficient": "1.0"
+        },
+        "2025-04-04": {
+            "1. open": "238.0",
+            "2. high": "240.16",
+            "3. low": "226.88",
+            "4. close": "227.48",
+            "5. adjusted close": "227.48",
+            "6. volume": "7407096",
+            "7. dividend amount": "0.0000",
+            "8. split coefficient": "1.0"
+        },
+        "2025-04-03": {
+            "1. open": "242.71",
+            "2. high": "250.61",
+            "3. low": "242.53",
+            "4. close": "243.49",
+            "5. adjusted close": "243.49",
+            "6. volume": "5309626",
+            "7. dividend amount": "0.0000",
+            "8. split coefficient": "1.0"
+        }
+    }
+}
 
 def response(contents, status_code=requests.codes.ok):
     """Return a context manager to patch a JSON response."""
@@ -27,6 +83,21 @@ class AlphavantagePriceFetcher(unittest.TestCase):
 
     def tearDown(self):
         del environ["ALPHAVANTAGE_API_KEY"]
+
+    def test_get_historical_price(self):
+        with response(contents=response_tsda):
+            srcprice = alphavantage.Source().get_historical_price(
+                "price:IBM:USD", datetime.datetime(2025, 4, 4).replace(tzinfo=timezone)
+            )
+            self.assertEqual(Decimal("227.48"), srcprice.price)
+            self.assertEqual(
+                datetime.datetime(2025, 4, 4)
+                .replace(tzinfo=datetime.timezone.utc)
+                .date(),
+                srcprice.time.date(),
+            )
+            self.assertEqual("USD", srcprice.quote_currency)
+
 
     def test_error_invalid_ticker(self):
         with self.assertRaises(ValueError):

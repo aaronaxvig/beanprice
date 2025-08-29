@@ -675,7 +675,6 @@ def filter_redundant_prices(
 def process_args() -> Tuple[
     argparse.Namespace,
     List[DatedPrice],
-    data.Directives,
     Optional[Any],
 ]:
     """Process the arguments. This also initializes the logging module.

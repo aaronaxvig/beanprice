@@ -28,7 +28,7 @@ import logging
 import re
 from os import environ
 from time import sleep
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 from dateutil.tz import tz
 from dateutil.parser import parse
@@ -117,7 +117,8 @@ class Source(source.Source):
         # Due to weekends the data actually goes back just under 5 months (~150 days) so
         # this could be optimized more.
         param_output_size = "compact"
-        if time < datetime.now(timezone.utc) - timedelta(days=130):
+        past_date = datetime.now() - timedelta(days=130)
+        if time < past_date:
             param_output_size = "full"
 
         if kind == "price":
